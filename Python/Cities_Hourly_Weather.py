@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 import os
 
-# 🔐 Your OpenWeatherMap API Key
+# OpenWeatherMap API Key
 API_KEY = "YOUR_OPENWEATHERMAP_API_KEY"
 GEOCODE_URL = "http://api.openweathermap.org/geo/1.0/direct"
 ONECALL_URL = "https://api.openweathermap.org/data/2.5/onecall"
@@ -97,7 +97,7 @@ def main():
     run_id = 1
 
     while True:
-        print(f"\n⏳ Starting run #{run_id} at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
+        print(f"\n Starting run #{run_id} at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
         run_once(cities_np, countries_np, run_id)
         print(f"✅ Run {run_id} completed and logged.")
         run_id += 1
