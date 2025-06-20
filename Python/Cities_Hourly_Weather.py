@@ -1,22 +1,24 @@
 import requests
 import time
-import csv
 import pandas as pd
 import numpy as np
 from bs4 import BeautifulSoup
 from datetime import datetime
 import os
+from pymongo import MongoClient
 
-# 🔐 Your OpenWeatherMap API Key
-API_KEY = "YOUR_OPENWEATHERMAP_API_KEY"  # ← Replace with your real API key
+# 🔐 Your OpenWeatherMap API Key (set as env variable)
+API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
-# API Endpoints
+# 🌐 API Endpoints
 GEOCODE_URL = "http://api.openweathermap.org/geo/1.0/direct"
 ONECALL_URL = "https://api.openweathermap.org/data/2.5/onecall"
 AIR_QUALITY_URL = "http://api.openweathermap.org/data/2.5/air_pollution"
 
-# Output file
-CSV_FILE = "weather_data_log.csv"
+# 🗃️ MongoDB Setup
+client = MongoClient("mongodb://localhost:27017/")
+db = client["weather_etl"]
+collection = db["hourly_weather_logs"]
 
 # 🏙️ Scrape top 200 cities and countries
 def fetch_top_200_cities():
@@ -47,7 +49,7 @@ def geocode_city(city, country):
         return data["lat"], data["lon"]
     return None, None
 
-# 🌦️ Get weather data
+# 🌦️ Get hourly weather
 def fetch_hourly_weather(lat, lon):
     params = {
         "lat": lat, "lon": lon,
@@ -66,11 +68,7 @@ def fetch_hourly_weather(lat, lon):
 
 # 🧪 Get air quality data
 def fetch_air_quality(lat, lon):
-    params = {
-        "lat": lat,
-        "lon": lon,
-        "appid": API_KEY
-    }
+    params = {"lat": lat, "lon": lon, "appid": API_KEY}
     r = requests.get(AIR_QUALITY_URL, params=params)
     if r.status_code == 200:
         data = r.json().get("list", [{}])[0]
@@ -85,60 +83,57 @@ def fetch_air_quality(lat, lon):
         }
     return {"aqi": "N/A", "pm2_5": "N/A", "pm10": "N/A", "co": "N/A", "no2": "N/A"}
 
-# One full run
+# 🚀 One full data run
 def run_once(cities_np, countries_np, run_id):
-    file_exists = os.path.isfile(CSV_FILE)
+    documents = []
 
-    with open(CSV_FILE, "a", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        if not file_exists:
-            writer.writerow([
-                "Run ID", "City", "Country", "Datetime UTC",
-                "Temperature (C)", "Humidity (%)", "Precipitation (mm)",
-                "Air Quality Index", "PM2.5", "PM10", "CO", "NO2"
-            ])
+    for i in range(len(cities_np)):
+        city = cities_np[i]
+        country = countries_np[i]
+        print(f"[Run {run_id}] 🌍 {i+1}/{len(cities_np)}: {city}, {country}")
 
-        for i in range(len(cities_np)):
-            city = cities_np[i]
-            country = countries_np[i]
-            print(f"[Run {run_id}] 🌍 {i+1}/{len(cities_np)}: {city}, {country}")
+        lat, lon = geocode_city(city, country)
+        if lat is None:
+            print(f"❌ Could not geocode {city}, {country}")
+            continue
 
-            lat, lon = geocode_city(city, country)
-            if lat is None:
-                print(f"❌ Could not geocode {city}, {country}")
-                continue
+        hourly_data = fetch_hourly_weather(lat, lon)
+        if not hourly_data:
+            print(f"⚠️ No weather data for {city}")
+            continue
 
-            # Weather
-            hourly_data = fetch_hourly_weather(lat, lon)
-            if not hourly_data:
-                print(f"⚠️ No weather data for {city}")
-                continue
+        hour = hourly_data[0]
+        dt = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(hour["dt"]))
+        temp = hour.get("temp", "N/A")
+        humidity = hour.get("humidity", "N/A")
+        rain = hour.get("rain", {}).get("1h", 0)
+        snow = hour.get("snow", {}).get("1h", 0)
+        precipitation = rain + snow
 
-            hour = hourly_data[0]  # Current hour
-            dt = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(hour["dt"]))
-            temp = hour.get("temp", "N/A")
-            humidity = hour.get("humidity", "N/A")
-            rain = hour.get("rain", {}).get("1h", 0)
-            snow = hour.get("snow", {}).get("1h", 0)
-            precipitation = rain + snow
+        air_quality = fetch_air_quality(lat, lon)
 
-            # Air Quality
-            air_quality = fetch_air_quality(lat, lon)
-            aqi = air_quality["aqi"]
-            pm2_5 = air_quality["pm2_5"]
-            pm10 = air_quality["pm10"]
-            co = air_quality["co"]
-            no2 = air_quality["no2"]
+        documents.append({
+            "run_id": run_id,
+            "city": city,
+            "country": country,
+            "timestamp_utc": dt,
+            "weather": {
+                "temperature_c": temp,
+                "humidity": humidity,
+                "precipitation_mm": precipitation
+            },
+            "air_quality": air_quality
+        })
 
-            # Save to CSV
-            writer.writerow([
-                run_id, city, country, dt, temp, humidity, precipitation,
-                aqi, pm2_5, pm10, co, no2
-            ])
+        time.sleep(0.5)  # 🛑 Avoid hitting rate limits
 
-            time.sleep(0.5)  # Rate limiting
+    if documents:
+        collection.insert_many(documents)
+        print(f"✅ Inserted {len(documents)} records to MongoDB.")
+    else:
+        print("⚠️ No documents to insert.")
 
-# 🚀 Entry point
+# 🕒 Main execution loop
 def main():
     cities_np, countries_np = fetch_top_200_cities()
     print("📍 Loaded top 200 cities.")
@@ -147,7 +142,7 @@ def main():
     while True:
         print(f"\n⏳ Starting run #{run_id} at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
         run_once(cities_np, countries_np, run_id)
-        print(f" Run {run_id} completed and logged.")
+        print(f"✅ Run {run_id} completed and logged.")
         run_id += 1
         print("💤 Sleeping for 1 hour...\n")
         time.sleep(3600)
