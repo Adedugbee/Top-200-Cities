@@ -15,7 +15,7 @@ GEOCODE_URL = "http://api.openweathermap.org/geo/1.0/direct"
 ONECALL_URL = "https://api.openweathermap.org/data/2.5/onecall"
 AIR_QUALITY_URL = "http://api.openweathermap.org/data/2.5/air_pollution"
 
-# 🗃️ MongoDB Setup
+# Connecting to MongoDB
 client = MongoClient("mongodb://localhost:27017/")
 db = client["weather_etl"]
 collection = db["hourly_weather_logs"]
