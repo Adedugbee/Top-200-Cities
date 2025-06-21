@@ -8,7 +8,7 @@ import os
 from pymongo import MongoClient
 print("All necessary packages have been installed sucessfully")
 
-# 🔐 Your OpenWeatherMap API Key (set as env variable)
+# Your OpenWeatherMap API Key (set as env variable)
 API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
 #API Endpoints
@@ -69,7 +69,7 @@ def fetch_hourly_weather(lat, lon):
         return fetch_hourly_weather(lat, lon)
     return []
 
-# 🧪 Get air quality data
+# Get air quality data
 def fetch_air_quality(lat, lon):
     params = {"lat": lat, "lon": lon, "appid": API_KEY}
     r = requests.get(AIR_QUALITY_URL, params=params)
@@ -86,23 +86,23 @@ def fetch_air_quality(lat, lon):
         }
     return {"aqi": "N/A", "pm2_5": "N/A", "pm10": "N/A", "co": "N/A", "no2": "N/A"}
 
-# 🚀 One full data run
+# One full data run
 def run_once(cities_np, countries_np, run_id):
     documents = []
 
     for i in range(len(cities_np)):
         city = cities_np[i]
         country = countries_np[i]
-        print(f"[Run {run_id}] 🌍 {i+1}/{len(cities_np)}: {city}, {country}")
+        print(f"[Run {run_id}] {i+1}/{len(cities_np)}: {city}, {country}")
 
         lat, lon = geocode_city(city, country)
         if lat is None:
-            print(f"❌ Could not geocode {city}, {country}")
+            print(f"Could not geocode {city}, {country}")
             continue
 
         hourly_data = fetch_hourly_weather(lat, lon)
         if not hourly_data:
-            print(f"⚠️ No weather data for {city}")
+            print(f"No weather data for {city}")
             continue
 
         hour = hourly_data[0]
@@ -128,26 +128,26 @@ def run_once(cities_np, countries_np, run_id):
             "air_quality": air_quality
         })
 
-        time.sleep(0.5)  # 🛑 Avoid hitting rate limits
+        time.sleep(0.5)  #Avoid hitting rate limits
 
     if documents:
         collection.insert_many(documents)
-        print(f"✅ Inserted {len(documents)} records to MongoDB.")
+        print(f"Inserted {len(documents)} records to MongoDB.")
     else:
-        print("⚠️ No documents to insert.")
+        print("No documents to insert.")
 
-# 🕒 Main execution loop
+#Main execution loop
 def main():
     cities_np, countries_np = fetch_top_200_cities()
-    print("📍 Loaded top 200 cities.")
+    print("Loaded top 200 cities.")
     run_id = 1
 
     while True:
-        print(f"\n⏳ Starting run #{run_id} at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
+        print(f"\n Starting run #{run_id} at {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
         run_once(cities_np, countries_np, run_id)
-        print(f"✅ Run {run_id} completed and logged.")
+        print(f"Run {run_id} completed and logged.")
         run_id += 1
-        print("💤 Sleeping for 1 hour...\n")
+        print("Sleeping for 1 hour...\n")
         time.sleep(3600)
 
 if __name__ == "__main__":
