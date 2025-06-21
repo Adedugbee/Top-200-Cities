@@ -6,11 +6,12 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 import os
 from pymongo import MongoClient
+print("All necessary packages have been installed sucessfully")
 
 # 🔐 Your OpenWeatherMap API Key (set as env variable)
 API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
-# 🌐 API Endpoints
+#API Endpoints
 GEOCODE_URL = "http://api.openweathermap.org/geo/1.0/direct"
 ONECALL_URL = "https://api.openweathermap.org/data/2.5/onecall"
 AIR_QUALITY_URL = "http://api.openweathermap.org/data/2.5/air_pollution"
@@ -19,8 +20,9 @@ AIR_QUALITY_URL = "http://api.openweathermap.org/data/2.5/air_pollution"
 client = MongoClient("mongodb://localhost:27017/")
 db = client["weather_etl"]
 collection = db["hourly_weather_logs"]
+print('successfully connect to the ', db)
 
-# 🏙️ Scrape top 200 cities and countries
+# Scrape top 200 cities and countries
 def fetch_top_200_cities():
     url = "https://worldpopulationreview.com/cities"
     response = requests.get(url)
@@ -32,15 +34,16 @@ def fetch_top_200_cities():
     data = []
     for row in rows[:200]:
         cols = row.find_all("td")
-        if len(cols) >= 3:
-            city = cols[1].text.strip()
-            country = cols[2].text.strip()
+        if len(cols) >= 4:
+            city = cols[2].text.strip()
+            country = cols[3].text.strip()
             data.append([city, country])
 
     df = pd.DataFrame(data, columns=["City", "Country"])
+    print(df.head(5))
     return np.array(df["City"]), np.array(df["Country"])
 
-# 🌍 Get coordinates from city name
+# Get coordinates from city name
 def geocode_city(city, country):
     params = {"q": f"{city},{country}", "limit": 1, "appid": API_KEY}
     r = requests.get(GEOCODE_URL, params=params)
@@ -49,7 +52,7 @@ def geocode_city(city, country):
         return data["lat"], data["lon"]
     return None, None
 
-# 🌦️ Get hourly weather
+# Get hourly weather
 def fetch_hourly_weather(lat, lon):
     params = {
         "lat": lat, "lon": lon,
